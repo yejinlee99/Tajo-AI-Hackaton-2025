@@ -1,9 +1,0 @@
-requests
-notebook
-openai-whisper
-gTTS
-fastapi
-websockets
-python-dotenv
-twilio
-"uvicorn[standard]"

@@ -1,5 +1,9 @@
-django
-pymysql
+requests
+notebook
+openai-whisper
+gTTS
+fastapi
+websockets
 python-dotenv
-cryptography
-gunicorn
+twilio
+"uvicorn[standard]"
