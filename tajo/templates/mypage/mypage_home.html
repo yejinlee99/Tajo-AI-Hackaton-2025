@@ -1,0 +1,18 @@
+<!-- templates/base.html -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Static files test</title>
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/mypage.css' %}">
+</head>
+<body>
+    <h1>guide 이용방법 화면 - 홈</h1>
+    <h2>이건 두번째 레슨....</h2>
+    <a href="{% url 'main_home' %}" class="btn">이전....메인 홈</a> <br>
+
+
+</body>
+</html>

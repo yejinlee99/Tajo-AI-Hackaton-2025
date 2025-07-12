@@ -1,0 +1,47 @@
+name: Discord Notification
+
+on:
+  issues:
+    types: [opened, closed]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [closed]
+  fork:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Discord Notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"📌 **${{ github.actor }}**님이 이슈를 **${{ github.event.action }}** 했어요! 👉 [이슈 보러가기](${{ github.event.issue.html_url }})\"}" \
+            $DISCORD_WEBHOOK
+
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"💬 **${{ github.actor }}**님이 이슈에 코멘트를 남겼어요! 👉 [코멘트 보기](${{ github.event.comment.html_url }})\"}" \
+            $DISCORD_WEBHOOK
+
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.action }}" = "closed" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"✅ **${{ github.actor }}**님이 PR을 Merge 했어요! 👉 [PR 보러가기](${{ github.event.pull_request.html_url }})\"}" \
+            $DISCORD_WEBHOOK
+
+          elif [ "${{ github.event_name }}" = "fork" ]; then
+            curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"🍴 **${{ github.actor }}**님이 저장소를 포크했어요!\"}" \
+            $DISCORD_WEBHOOK
+
+          else
+            echo "No matching event. Skipping."
+          fi
