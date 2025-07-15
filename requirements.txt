@@ -6,4 +6,4 @@ fastapi
 websockets
 python-dotenv
 twilio
-"uvicorn[standard]"
+uvicorn[standard]
