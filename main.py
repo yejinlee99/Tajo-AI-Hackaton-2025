@@ -92,7 +92,6 @@ async def handle_incoming_call(request: Request):
 
     return HTMLResponse(content=twiml_response, media_type="application/xml")
 
-
 @app.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
     print("=== WEBSOCKET CONNECTION ATTEMPT ===")
@@ -111,7 +110,7 @@ async def handle_media_stream(websocket: WebSocket):
     try:
         async with websockets.connect(
                 'wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview',
-                extra_headers={
+                additional_headers={
                     "Authorization": f"Bearer {OPENAI_API_KEY}",
                     "OpenAI-Beta": "realtime=v1"
                 }
@@ -179,21 +178,6 @@ async def handle_media_stream(websocket: WebSocket):
                             print("Speech interruption detected")
                             await handle_interruption()
 
-                        elif res.get('type') == 'input_audio_buffer.speech_stopped':
-                            print("Speech stopped, committing audio buffer")
-                            await openai_ws.send(json.dumps({
-                                "type": "input_audio_buffer.commit"
-                            }))
-
-                        elif res.get('type') == 'input_audio_buffer.committed':
-                            print("Audio buffer committed, creating response")
-                            await openai_ws.send(json.dumps({
-                                "type": "response.create",
-                                "response": {
-                                    "modalities": ["text", "audio"]
-                                }
-                            }))
-
                         elif res.get('type') == 'error':
                             print(f"OpenAI Error: {res}")
 
@@ -205,7 +189,6 @@ async def handle_media_stream(websocket: WebSocket):
 
                         elif res.get('type') == 'response.done':
                             print("OpenAI response completed")
-                            response_start_timestamp_twilio = None
 
                 except Exception as e:
                     print(f"Error in send_to_twilio: {e}")
@@ -249,7 +232,7 @@ async def handle_media_stream(websocket: WebSocket):
 
 async def send_session_update(openai_ws):
     # 세션 설정
-    session_config = {
+    await openai_ws.send(json.dumps({
         "type": "session.update",
         "session": {
             "turn_detection": {"type": "server_vad"},
@@ -257,19 +240,13 @@ async def send_session_update(openai_ws):
             "output_audio_format": "g711_ulaw",
             "voice": VOICE,
             "instructions": SYSTEM_MESSAGE,
-            "modalities": ["text", "audio"],
+            "modalities": ["audio", "text"],
             "temperature": 0.6
         }
-    }
-    
-    print("Sending session configuration...")
-    await openai_ws.send(json.dumps(session_config))
-    
-    # 약간의 지연 후 초기 메시지 전송
-    await asyncio.sleep(0.5)
-    
+    }))
+
     # 시스템이 먼저 인사하도록 설정
-    initial_message = {
+    await openai_ws.send(json.dumps({
         "type": "conversation.item.create",
         "item": {
             "type": "message",
@@ -279,25 +256,15 @@ async def send_session_update(openai_ws):
                 "text": "안녕하세요! 택시 호출 서비스입니다. 먼저 출발지를 알려주시겠어요?"
             }]
         }
-    }
-    
-    print("Sending initial greeting message...")
-    await openai_ws.send(json.dumps(initial_message))
-    
-    # 약간의 지연 후 응답 생성
-    await asyncio.sleep(0.2)
-    
+    }))
+
     # AI가 응답을 생성하도록 트리거
-    response_trigger = {
+    await openai_ws.send(json.dumps({
         "type": "response.create",
         "response": {
             "modalities": ["text", "audio"]
         }
-    }
-    
-    print("Triggering initial response...")
-    await openai_ws.send(json.dumps(response_trigger))
-
+    }))
 # Run server
 if __name__ == "__main__":
     import uvicorn
