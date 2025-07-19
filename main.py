@@ -7,8 +7,8 @@ from twilio.twiml.voice_response import VoiceResponse, Connect
 from dotenv import load_dotenv
 from websockets.protocol import State
 
-# 로깅 설정 추가
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# 로깅 설정 - INFO 레벨로 변경
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -51,67 +51,42 @@ async def health_check():
 
 @app.api_route("/incoming-call", methods=["GET", "POST"])
 async def handle_incoming_call(request: Request):
-    print(f"=== INCOMING CALL DEBUG INFO ===")
-    print(f"Method: {request.method}")
-    print(f"URL: {request.url}")
-    print(f"Headers: {dict(request.headers)}")
-
-    # POST 데이터 확인
-    if request.method == "POST":
-        try:
-            form_data = await request.form()
-            print(f"Form data: {dict(form_data)}")
-        except Exception as e:
-            print(f"Error reading form data: {e}")
-
-    # Query parameters 확인
-    print(f"Query params: {dict(request.query_params)}")
-
-    # PUBLIC_DOMAIN 확인
-    print(f"PUBLIC_DOMAIN env var: {PUBLIC_DOMAIN}")
+    logger.info("Incoming call received")
 
     response = VoiceResponse()
 
     # PUBLIC_DOMAIN 사용 (환경변수에서 설정)
     if PUBLIC_DOMAIN:
         base_url = PUBLIC_DOMAIN
-        print(f"Using PUBLIC_DOMAIN: {base_url}")
     else:
         # fallback: request에서 추출
         scheme = "https" if request.url.scheme == "https" else "http"
         host = request.headers.get("host", request.url.netloc)
         base_url = f"{scheme}://{host}"
-        print(f"Using fallback URL: {base_url}")
 
     # WebSocket URL 생성
     websocket_url = base_url.replace("http://", "ws://").replace("https://", "wss://") + "/media-stream"
-    print(f"Generated WebSocket URL: {websocket_url}")
+    logger.info(f"WebSocket URL: {websocket_url}")
 
     connect = Connect()
     connect.stream(url=websocket_url)
     response.append(connect)
 
-    twiml_response = str(response)
-    print(f"Generated TwiML Response: {twiml_response}")
-    print(f"=== END DEBUG INFO ===")
-
-    return HTMLResponse(content=twiml_response, media_type="application/xml")
+    return HTMLResponse(content=str(response), media_type="application/xml")
 
 
 @app.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
-    logger.info("=== WEBSOCKET CONNECTION ATTEMPT ===")
-    logger.info(f"Client headers: {websocket.headers}")
-    logger.info(f"Client query params: {websocket.query_params}")
+    logger.info("WebSocket connection attempt")
 
     try:
         await websocket.accept()
-        logger.info("WebSocket connection established successfully")
+        logger.info("WebSocket connection established")
     except Exception as e:
         logger.error(f"Failed to accept WebSocket connection: {e}")
         return
 
-    logger.info("Attempting to connect to OpenAI WebSocket...")
+    logger.info("Connecting to OpenAI WebSocket...")
 
     try:
         async with websockets.connect(
@@ -121,7 +96,7 @@ async def handle_media_stream(websocket: WebSocket):
                     "OpenAI-Beta": "realtime=v1"
                 }
         ) as openai_ws:
-            logger.info("Successfully connected to OpenAI WebSocket")
+            logger.info("Connected to OpenAI WebSocket")
             await send_session_update(openai_ws)
             stream_sid = None
             mark_queue = []
@@ -134,7 +109,6 @@ async def handle_media_stream(websocket: WebSocket):
                 try:
                     async for msg in websocket.iter_text():
                         data = json.loads(msg)
-                        logger.debug(f"Twilio: {data['event']}")
 
                         if data['event'] == 'media' and openai_ws.state == State.OPEN:
                             latest_media_timestamp = int(data['media']['timestamp'])
@@ -163,7 +137,6 @@ async def handle_media_stream(websocket: WebSocket):
                     async for msg in openai_ws:
                         res = json.loads(msg)
                         event_type = res.get('type', 'unknown')
-                        logger.debug(f"OpenAI: {event_type}")
 
                         if res.get('type') == 'response.audio.delta' and 'delta' in res:
                             payload = base64.b64encode(base64.b64decode(res['delta'])).decode()
@@ -174,7 +147,7 @@ async def handle_media_stream(websocket: WebSocket):
                             })
                             if response_start_timestamp_twilio is None:
                                 response_start_timestamp_twilio = latest_media_timestamp
-                                logger.info("Started audio response")
+                                logger.info("AI response started")
 
                             if res.get('item_id'):
                                 last_assistant_item = res['item_id']
@@ -183,19 +156,13 @@ async def handle_media_stream(websocket: WebSocket):
                         elif res.get('type') == 'input_audio_buffer.speech_stopped':
                             logger.info("User speech stopped")
 
-                        elif res.get('type') == 'input_audio_buffer.committed':
-                            logger.info("User audio committed")
-
                         elif res.get('type') == 'conversation.item.input_audio_transcription.completed':
                             transcript = res.get('transcript', '')
-                            logger.info(f"User said: '{transcript}'")
-
-                        elif res.get('type') == 'response.created':
-                            logger.info("AI response created")
+                            logger.info(f"User: {transcript}")
 
                         elif res.get('type') == 'response.audio_transcript.done':
                             transcript = res.get('transcript', '')
-                            logger.info(f"AI said: '{transcript}'")
+                            logger.info(f"AI: {transcript}")
 
                         elif res.get('type') == 'response.done':
                             logger.info("AI response completed")
@@ -244,6 +211,7 @@ async def handle_media_stream(websocket: WebSocket):
                         "mark": {"name": "responsePart"}
                     })
                     mark_queue.append("responsePart")
+
             await asyncio.gather(receive_from_twilio(), send_to_twilio())
 
     except Exception as e:
@@ -255,6 +223,8 @@ async def handle_media_stream(websocket: WebSocket):
 
 
 async def send_session_update(openai_ws):
+    logger.info("Configuring OpenAI session")
+
     # 세션 설정
     await openai_ws.send(json.dumps({
         "type": "session.update",
