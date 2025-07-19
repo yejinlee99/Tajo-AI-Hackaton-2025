@@ -139,11 +139,7 @@ async def handle_media_stream(websocket: WebSocket):
 
                         # 수정된 부분: openai_ws가 특정 타입인지도 함께 확인합니다.
                         if data['event'] == 'media':
-                            # websockets.client.WebSocketClientProtocol 타입을 명시적으로 임포트해야 합니다.
-                            from websockets.client import WebSocketClientProtocol
-
-                            # openai_ws가 None이 아니고, WebSocketClientProtocol 타입이며, 닫히지 않았을 때만 처리
-                            if openai_ws and isinstance(openai_ws, WebSocketClientProtocol) and not openai_ws.closed:
+                            if openai_ws and not openai_ws.is_closed:
                                 latest_media_timestamp = int(data['media']['timestamp'])
                                 await openai_ws.send(json.dumps({
                                     "type": "input_audio_buffer.append",
@@ -151,13 +147,8 @@ async def handle_media_stream(websocket: WebSocket):
                                 }))
                             else:
                                 logger.warning(
-                                    f"Received media but OpenAI WebSocket is not open, not initialized, or not of expected type. Current type: {type(openai_ws)}"
+                                    f"Received media but OpenAI WebSocket is not open or closed, websocket state : {openai_ws.closed if openai_ws else 'None'}"
                                 )
-                                # 디버깅을 위해 현재 openai_ws의 타입을 더 자세히 로그에 남깁니다.
-                                if openai_ws and not isinstance(openai_ws, WebSocketClientProtocol):
-                                    logger.error(
-                                        f"Unexpected openai_ws type: {type(openai_ws)}. Expected WebSocketClientProtocol.")
-
 
                         elif data['event'] == 'start':
                             stream_sid = data['start']['streamSid']
@@ -172,9 +163,8 @@ async def handle_media_stream(websocket: WebSocket):
 
                 except WebSocketDisconnect:
                     logger.info("Twilio WebSocket disconnected")
-                    # 여기도 동일하게 openai_ws가 유효한지 확인하는 것이 좋습니다.
-                    from websockets.client import WebSocketClientProtocol
-                    if openai_ws and isinstance(openai_ws, WebSocketClientProtocol) and not openai_ws.closed:
+
+                    if openai_ws and not openai_ws.closed:
                         await openai_ws.close()
 
                 except Exception as e:
@@ -322,4 +312,4 @@ async def send_session_update(openai_ws):
 if __name__ == "__main__":
     import uvicorn
     logger.info(f"Starting uvicorn server on host 0.0.0.0 and port {PORT}")
-    uvicorn.run("app:app", host="0.0.0.0", port=PORT)
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT)
