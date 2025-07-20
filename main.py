@@ -1,4 +1,3 @@
-# main.py
 import os, json, base64, asyncio, websockets, logging
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import HTMLResponse
@@ -14,8 +13,10 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 app = FastAPI()
 
+# 환경변수 로드
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PORT = int(os.getenv("PORT", 5050))
+
 # EC2 공개 IP 또는 도메인 설정
 PUBLIC_DOMAIN = os.getenv("PUBLIC_DOMAIN")  # 예: "http://your-ec2-ip:5050" 또는 "https://your-domain.com"
 
@@ -38,11 +39,10 @@ SYSTEM_MESSAGE = """
 - 항상 한국어로 대답하세요.
 """
 
-
+# 도메인 활성화 확인용
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return "<h1>gpt-4o-mini Realtime Test Server Running</h1>"
-
 
 @app.get("/health")
 async def health_check():
